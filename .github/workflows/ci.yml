@@ -64,9 +64,16 @@ jobs:
           curl -sSL -o amc.tar.gz \
             "https://github.com/amalgame-lang/Amalgame/releases/download/${TAG}/amc-${VERSION}-linux-x86_64.tar.gz"
           mkdir -p $RUNNER_TEMP/amc-install
+          # Tarball is XDG-layout since v0.8.1:
+          #   amc-<ver>-linux-x86_64/
+          #     ├── bin/amc
+          #     └── share/amalgame/runtime/  (and docs/, lib/)
+          # --strip-components=1 peels the top dir; the amc binary
+          # then lives at $RUNNER_TEMP/amc-install/bin/amc and the
+          # runtime headers at .../share/amalgame/runtime/.
           tar -xzf amc.tar.gz -C $RUNNER_TEMP/amc-install --strip-components=1
-          echo "AMC=$RUNNER_TEMP/amc-install/amc" >> $GITHUB_ENV
-          echo "AMC_RUNTIME=$RUNNER_TEMP/amc-install/runtime" >> $GITHUB_ENV
+          echo "AMC=$RUNNER_TEMP/amc-install/bin/amc" >> $GITHUB_ENV
+          echo "AMC_RUNTIME=$RUNNER_TEMP/amc-install/share/amalgame/runtime" >> $GITHUB_ENV
 
       - name: Probe libpq + postgres reachability
         run: |
