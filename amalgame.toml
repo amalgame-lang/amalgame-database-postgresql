@@ -1,0 +1,95 @@
+# Package manifest — amalgame-database-postgresql
+#
+# PostgreSQL binding for Amalgame — dynamic-linked to the system
+# libpq (the official C client library shipped with PostgreSQL).
+# Nothing is vendored: this is the first amalgame-lang package to
+# exercise the "dynamic-link to a system library" pattern.
+#
+# Why dynamic-link instead of vendor like SQLite / DuckDB:
+#   - libpq is large (~600k LoC of postgres internals it shares
+#     with the server)
+#   - it tracks the postgres server's protocol versions; vendoring
+#     a snapshot means it would drift out of date with whatever
+#     server the user actually points to
+#   - libpq is universally available via the OS package manager
+#     (apt / dnf / brew / pacman) so users don't have to build
+#     anything
+#
+# Prereqs (compile time):
+#   Debian / Ubuntu : apt install libpq-dev
+#   Fedora / RHEL   : dnf install libpq-devel
+#   Arch            : pacman -S postgresql-libs
+#   macOS (Homebrew): brew install libpq
+#                     (you may also need to brew link --force libpq
+#                      or add /opt/homebrew/opt/libpq/include to
+#                      AMALGAME_EXTRA_CFLAGS, libdir to AMALGAME_EXTRA_LDFLAGS)
+#   Windows         : install PostgreSQL from postgresql.org, point
+#                     the include and lib paths at <prefix>/include
+#                     and <prefix>/lib
+#
+# Prereqs (runtime, the deployed user binary): the same libpq.so /
+# libpq.dylib / libpq.dll must be present on the user's machine.
+# For deployment, ship it alongside the binary or rely on the OS
+# package manager.
+#
+# Surface (v1):
+#   Open(connStr) / Close / IsOpen / LastError      lifecycle + diag
+#   Exec(sql)                                       DDL / INSERT / UPDATE / DELETE
+#   QueryAll(sql) → List<List<string>>              SELECT all rows × cols
+#   RowCount(sql)                                   convenience for COUNT(*)-style
+#   Changes                                         rows affected by last Exec
+#   ServerVersion                                   postgres major.minor as string
+#
+# Out of scope (v2):
+#   - Parameter binding ($1, $2 style) via PQexecParams
+#   - Prepared statement reuse (PQprepare / PQexecPrepared)
+#   - Typed column accessors (AsInt / AsBytes / AsTimestamp)
+#   - COPY-protocol bulk insert
+#   - Async query mode (PQsendQuery + PQisBusy + PQconsumeInput)
+#   - LISTEN / NOTIFY pub-sub (PQnotifies)
+#   - Cursor support for large result sets
+#   - SSL/TLS controls (libpq handles it via the connstr automatically)
+#
+# Installation:
+#
+#   amc package add postgresql                                          # via index
+#   amc package add github.com/amalgame-lang/amalgame-database-postgresql@v0.1.0
+
+[package]
+name              = "amalgame-database-postgresql"
+version           = "0.1.0"
+license           = "Apache-2.0"
+description       = "PostgreSQL binding for Amalgame — dynamic-linked to system libpq, no vendored lib."
+authors           = ["Bastien Mouget"]
+required-amalgame = ">=0.5.4"
+schema-version    = 1
+
+[stdlib]
+class     = "PostgreSQL"
+header    = "runtime/Amalgame_Database_PostgreSQL.h"
+namespace = "Amalgame.Database.PostgreSQL"
+
+# No vendored .c sources — libpq is provided by the system. The
+# wrapper header uses __has_include() to find libpq-fe.h on both
+# the Debian-style (<postgresql/libpq-fe.h>) and Fedora-style
+# (<libpq-fe.h>) layouts without manifest gymnastics.
+
+# Link against the system libpq. amc forwards this as `-lpq` to
+# the user binary's gcc step.
+libs       = ["pq"]
+
+# No precompile — there's nothing to precompile (the runtime
+# header is header-only inline, and the actual implementation
+# lives in the system's libpq.so/.dylib/.dll).
+
+[stdlib.functions]
+Open           = { returns = "AmalgamePostgreSQL*" }
+Close          = { returns = "void" }
+IsOpen         = { returns = "code_bool" }
+LastError      = { returns = "code_string" }
+Exec           = { returns = "code_bool" }
+QueryAll       = { returns = "AmalgameList*" }
+Changes        = { returns = "i64" }
+ServerVersion  = { returns = "code_string" }
+
+[dependencies]
