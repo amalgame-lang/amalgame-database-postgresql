@@ -42,12 +42,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # v0.8.x is the actively supported amc series for this
-        # package — earlier releases (v0.7.x) have cgen bugs that
-        # affect QueryAll → List<List<string>> indexing. Bump the
-        # required-amalgame in the manifest if you remove old
+        # v0.8.19+ is the actively supported amc series — earlier
+        # releases (v0.7.x, v0.8.0–v0.8.18) have cgen bugs that
+        # affect QueryAll → List<List<string>> indexing and
+        # namespace pre-extraction (both fixed in v0.8.19). Bump
+        # the required-amalgame in the manifest if you remove old
         # entries from this matrix.
-        amc-tag: [v0.8.18]
+        amc-tag: [v0.8.19]
 
     steps:
       - uses: actions/checkout@v4

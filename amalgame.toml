@@ -61,7 +61,7 @@ version           = "0.1.0"
 license           = "Apache-2.0"
 description       = "PostgreSQL binding for Amalgame — dynamic-linked to system libpq, no vendored lib."
 authors           = ["Bastien Mouget"]
-required-amalgame = ">=0.8.0"
+required-amalgame = ">=0.8.19"
 schema-version    = 1
 
 [stdlib]

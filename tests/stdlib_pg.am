@@ -1,16 +1,12 @@
 // Stdlib test: Amalgame.Database.PostgreSQL — libpq binding.
-// Self-contained schema (amctest_* prefix) so a shared dev
-// server isn't polluted. Tests CREATE / INSERT / SELECT / DROP.
+// Self-contained schema namespace (`amctest_*` prefix) so a
+// shared dev server isn't polluted. Tests CREATE / INSERT /
+// SELECT / DROP.
 //
-// Connection string comes from the environment-set PG variables
+// Connection string comes from the environment-set PG* variables
 // libpq reads automatically (PGHOST, PGPORT, PGUSER, PGPASSWORD,
 // PGDATABASE), so the .am file itself doesn't carry credentials.
 // The test runner exports those before invoking us.
-//
-// NB: avoid the word n-a-m-e-s-p-a-c-e in comments here — amc's
-// lexer (as of 0.8.18) doesn't skip // comment lines that contain
-// a keyword like that, and consumes the trailing text as a real
-// declaration. Tracked as a separate compiler bug.
 
 namespace Tests
 
@@ -71,14 +67,9 @@ public class Program {
         }
 
         // ── Verify cell content ──────────────────────────────
-        // Explicit `List<string>` annotation here is mandatory — cgen
-        // erases the generic return type when `Get` is called via
-        // chained shorthand on a value returned by a cross-package
-        // call (CONTINUATION.md gotcha #3). Without it, `row0.Get(1)`
-        // lowers to `void_Get(...)` and the linker complains.
-        let row0: List<string> = rows.Get(0)
-        let row1: List<string> = rows.Get(1)
-        let row2: List<string> = rows.Get(2)
+        let row0 = rows.Get(0)
+        let row1 = rows.Get(1)
+        let row2 = rows.Get(2)
         let body0: string = row0.Get(1)
         let body1: string = row1.Get(1)
         let body2: string = row2.Get(1)
