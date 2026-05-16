@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test against amc ${{ matrix.amc-tag }}
+    runs-on: ubuntu-latest
+
+    # GitHub Actions native service container: a fresh postgres
+    # instance is spun up alongside the job. Health-check waits
+    # until pg_isready returns OK before steps start running.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: amctest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # libpq reads these automatically when Open("") is called
+      # with an empty connection string — same pattern as psql,
+      # pg_dump, etc.
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test
+      PGDATABASE: amctest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cover the latest released amc and one stable older version
+        # so regressions in either direction surface here. Append a
+        # new tag whenever amc cuts a release that meaningfully
+        # touches the package surface.
+        amc-tag: [v0.8.18, v0.7.10]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (libgc + libcurl + libpq-dev)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libgc-dev libcurl4-openssl-dev libpq-dev
+
+      - name: Download amc ${{ matrix.amc-tag }}
+        run: |
+          set -e
+          TAG="${{ matrix.amc-tag }}"
+          VERSION="${TAG#v}"
+          curl -sSL -o amc.tar.gz \
+            "https://github.com/amalgame-lang/Amalgame/releases/download/${TAG}/amc-${VERSION}-linux-x86_64.tar.gz"
+          mkdir -p $RUNNER_TEMP/amc-install
+          tar -xzf amc.tar.gz -C $RUNNER_TEMP/amc-install --strip-components=1
+          echo "AMC=$RUNNER_TEMP/amc-install/amc" >> $GITHUB_ENV
+          echo "AMC_RUNTIME=$RUNNER_TEMP/amc-install/runtime" >> $GITHUB_ENV
+
+      - name: Probe libpq + postgres reachability
+        run: |
+          echo "── libpq header probe ──"
+          echo '#include <libpq-fe.h>' | gcc -E -xc - >/dev/null && \
+            echo "  libpq-fe.h: OK" || \
+            echo "  libpq-fe.h: MISSING"
+          echo "── postgres reachability ──"
+          PGPASSWORD=test psql -h 127.0.0.1 -U postgres -d amctest -c "SELECT version();" || \
+            { echo "  postgres unreachable — service container not healthy?"; exit 1; }
+
+      - name: Run end-to-end tests
+        run: ./tests/run_tests.sh "$AMC"
