@@ -71,9 +71,14 @@ public class Program {
         }
 
         // ── Verify cell content ──────────────────────────────
-        let row0 = rows.Get(0)
-        let row1 = rows.Get(1)
-        let row2 = rows.Get(2)
+        // Explicit `List<string>` annotation here is mandatory — cgen
+        // erases the generic return type when `Get` is called via
+        // chained shorthand on a value returned by a cross-package
+        // call (CONTINUATION.md gotcha #3). Without it, `row0.Get(1)`
+        // lowers to `void_Get(...)` and the linker complains.
+        let row0: List<string> = rows.Get(0)
+        let row1: List<string> = rows.Get(1)
+        let row2: List<string> = rows.Get(2)
         let body0: string = row0.Get(1)
         let body1: string = row1.Get(1)
         let body2: string = row2.Get(1)
