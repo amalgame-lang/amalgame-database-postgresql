@@ -57,11 +57,11 @@
 
 [package]
 name              = "amalgame-database-postgresql"
-version           = "0.1.0"
+version           = "0.2.0"
 license           = "Apache-2.0"
-description       = "PostgreSQL binding for Amalgame — dynamic-linked to system libpq, no vendored lib."
+description       = "PostgreSQL binding for Amalgame — dynamic-linked to system libpq, no vendored lib. QueryAll returns typed List<List<string>>."
 authors           = ["Bastien Mouget"]
-required-amalgame = ">=0.8.19"
+required-amalgame = ">=0.8.40"
 schema-version    = 1
 
 [stdlib]
@@ -88,7 +88,13 @@ Close          = { returns = "void" }
 IsOpen         = { returns = "code_bool" }
 LastError      = { returns = "code_string" }
 Exec           = { returns = "code_bool" }
-QueryAll       = { returns = "AmalgameList*" }
+# `returns_generic` (since amc 0.8.40) tells the cgen the AM-level
+# shape of the nested-generic return so that the consumer can
+# chain `.Get(i).Get(j)` without explicit type annotations:
+#   let rows = db.QueryAll(sql)   // inferred List<List<string>>
+#   let r0   = rows.Get(0)        // inferred List<string>
+#   let s    = r0.Get(1)          // inferred string — no cast needed
+QueryAll       = { returns = "AmalgameList*", returns_generic = "List<List<string>>" }
 Changes        = { returns = "i64" }
 ServerVersion  = { returns = "code_string" }
 
