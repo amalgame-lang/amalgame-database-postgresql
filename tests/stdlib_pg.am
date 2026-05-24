@@ -67,24 +67,28 @@ public class Program {
         }
 
         // ── Verify cell content ──────────────────────────────
+        // No type annotations on `row*` / `body*` — the v0.2
+        // manifest's `returns_generic = "List<List<string>>"`
+        // lets amc infer the full chain (List<List<string>> →
+        // .Get(i) → List<string> → .Get(j) → string).
         let row0 = rows.Get(0)
         let row1 = rows.Get(1)
         let row2 = rows.Get(2)
-        let body0: string = row0.Get(1)
-        let body1: string = row1.Get(1)
-        let body2: string = row2.Get(1)
+        let body0 = row0.Get(1)
+        let body1 = row1.Get(1)
+        let body2 = row2.Get(1)
         let okBodies: bool = body0 == "alpha"
         let okBodies2: bool = body1 == "beta"
         let okBodies3: bool = body2 == "gamma"
         if (okBodies && okBodies2 && okBodies3) {
-            Console.WriteLine("[PASS] SELECT cell content")
+            Console.WriteLine("[PASS] SELECT cell content (no annotations)")
         } else {
             Console.WriteLine("[FAIL] cells: '" + body0 + "' / '"
                 + body1 + "' / '" + body2 + "'")
         }
 
-        // ── Verify SERIAL id starts at 1 ─────────────────────
-        let id0: string = row0.Get(0)
+        // ── Verify SERIAL id starts at 1 (inferred string) ───
+        let id0 = row0.Get(0)
         if (id0 == "1") {
             Console.WriteLine("[PASS] SERIAL id starts at 1")
         } else {

@@ -43,10 +43,10 @@ the client.
 
 ```bash
 amc package add postgresql                                                # via index
-amc package add github.com/amalgame-lang/amalgame-database-postgresql@v0.1.0
+amc package add github.com/amalgame-lang/amalgame-database-postgresql@v0.2.0
 ```
 
-Requires **amc 0.5.4+**.
+Requires **amc 0.8.40+** (for `returns_generic` on `QueryAll`).
 
 ## Surface
 
@@ -63,18 +63,18 @@ PostgreSQL.Exec(db, "CREATE TABLE IF NOT EXISTS notes (id SERIAL, body TEXT)")
 PostgreSQL.Exec(db, "INSERT INTO notes (body) VALUES ('hello postgres')")
 Console.WriteLine("inserted " + String_FromInt(PostgreSQL.Changes(db)) + " row")
 
+// Since v0.2.0 the manifest declares `returns_generic =
+// "List<List<string>>"` on QueryAll, so amc infers every cell as
+// `string` without any explicit annotations on `row` / `Get(j)`.
 let rows = PostgreSQL.QueryAll(db, "SELECT id, body FROM notes ORDER BY id")
-let i: int = 0
-while (i < rows.Count()) {
-    let row = rows.Get(i)
+for row in rows {
     Console.WriteLine(row.Get(0) + ": " + row.Get(1))
-    i = i + 1
 }
 
 PostgreSQL.Close(db)
 ```
 
-### v0.1.0 method surface
+### v0.2.0 method surface
 
 | Method | Returns | Notes |
 |---|---|---|
