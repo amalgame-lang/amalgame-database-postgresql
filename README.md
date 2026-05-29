@@ -74,7 +74,7 @@ for row in rows {
 PostgreSQL.Close(db)
 ```
 
-### v0.2.0 method surface
+### Method surface
 
 | Method | Returns | Notes |
 |---|---|---|
@@ -86,6 +86,27 @@ PostgreSQL.Close(db)
 | `PostgreSQL.QueryAll(db, sql)` | `List<List<string>>` | SELECT all rows × cols (text mode) |
 | `PostgreSQL.Changes(db)` | `int` | Rows affected by last Exec / row count of last QueryAll |
 | `PostgreSQL.ServerVersion(db)` | `string` | "16.2", "14.10", … |
+| `PostgreSQL.ExecBind(db, sql, params)` | `bool` | `$1`/`$2`/… placeholders via PQexecParams (v0.3+) |
+| `PostgreSQL.QueryBindAll(db, sql, params)` | `List<List<string>>` | Parameterised SELECT (v0.3+) |
+| `PostgreSQL.Begin(db)` | `bool` | Start transaction (v0.3+) |
+| `PostgreSQL.Commit(db)` | `bool` | Commit transaction (v0.3+) |
+| `PostgreSQL.Rollback(db)` | `bool` | Roll back transaction (v0.3+) |
+
+### Parameter binding (v0.3+)
+
+```amalgame
+let params: List<string> = new List<string>()
+params.Add("Alice")
+params.Add("30")
+PostgreSQL.ExecBind(db, "INSERT INTO users (name, age) VALUES ($1, $2)", params)
+```
+
+**Important — placeholders are `$1`, `$2`, … (NOT `?`)**. This
+matches libpq's native convention. The Amalgame binding side stays
+identical to the SQLite/DuckDB siblings — element 0 of the list
+maps to `$1`, element 1 to `$2`, etc. Every value goes through
+`PQexecParams` in text mode; PostgreSQL converts to the destination
+column type per its standard coercion rules.
 
 ### Connection string
 
