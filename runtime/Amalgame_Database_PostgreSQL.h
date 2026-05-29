@@ -267,6 +267,133 @@ static inline i64 Amalgame_Database_PostgreSQL_Changes(AmalgamePostgreSQL* db) {
     return db ? db->last_changes : 0;
 }
 
+/* ────────────────────────────────────────────────────────────────
+ * v0.3 surface — parameter binding + transactions.
+ *
+ * **Placeholders differ from SQLite/DuckDB**: PostgreSQL uses
+ * `$1, $2, ...` (1-indexed), not `?`. Pass them verbatim in the SQL
+ * string. The Amalgame `List<string>` binding side stays identical
+ * across backends — element 0 maps to `$1`, element 1 to `$2`, etc.
+ *
+ * Every value goes through `PQexecParams` in text mode, so libpq
+ * does the same client-side escape work PostgreSQL would do for
+ * a server-side prepared statement. NULL list entries become
+ * SQL NULL.
+ *
+ * Arity mismatches surface as libpq's native error ("bind message
+ * supplies N parameters, but prepared statement requires M") via
+ * the standard LastError path — we don't pre-check param count
+ * (would require PQprepare + PQdescribePrepared round-trips per
+ * call; the SQL-level error is good enough).
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Build the const char* paramValues array on the C stack for small
+ * param sets, falling back to heap alloc for larger ones. Returns a
+ * caller-owned heap buffer when n > stackCap; caller free()s. The
+ * stack buffer is used for n <= stackCap (no free needed). */
+static inline const char** _ampg_build_param_values(
+    AmalgameList* params, int n, const char** stackBuf, int stackCap)
+{
+    const char** out = (n <= stackCap) ? stackBuf
+                                       : (const char**) malloc((size_t)n * sizeof(char*));
+    for (int i = 0; i < n; i++) {
+        out[i] = (const char*) AmalgameList_get(params, i);   /* NULL → SQL NULL */
+    }
+    return out;
+}
+
+static inline code_bool Amalgame_Database_PostgreSQL_ExecBind(
+        AmalgamePostgreSQL* db, code_string sql, AmalgameList* params)
+{
+    if (!db || !db->conn) {
+        if (db) db->last_error = _ampg_err_dup("connection not open");
+        return 0;
+    }
+    if (!sql) {
+        db->last_error = _ampg_err_dup("null sql");
+        return 0;
+    }
+    int n = params ? (int) AmalgameList_size(params) : 0;
+    const char* stack[16];
+    const char** values = _ampg_build_param_values(params, n, stack, 16);
+    PGresult* r = PQexecParams(db->conn, sql, n, NULL, values, NULL, NULL, 0);
+    if (values != stack) free((void*) values);
+    if (!r) {
+        db->last_error = _ampg_err_from_conn(db->conn);
+        return 0;
+    }
+    ExecStatusType st = PQresultStatus(r);
+    if (st != PGRES_COMMAND_OK && st != PGRES_TUPLES_OK) {
+        db->last_error = _ampg_err_from_result(r);
+        PQclear(r);
+        return 0;
+    }
+    const char* tuples = PQcmdTuples(r);
+    db->last_changes = (tuples && *tuples) ? (i64) strtoll(tuples, NULL, 10) : 0;
+    PQclear(r);
+    db->last_error = _ampg_err_dup("");
+    return 1;
+}
+
+static inline AmalgameList* Amalgame_Database_PostgreSQL_QueryBindAll(
+        AmalgamePostgreSQL* db, code_string sql, AmalgameList* params)
+{
+    AmalgameList* rows = AmalgameList_new();
+    if (!db || !db->conn) {
+        if (db) db->last_error = _ampg_err_dup("connection not open");
+        return rows;
+    }
+    if (!sql) {
+        db->last_error = _ampg_err_dup("null sql");
+        return rows;
+    }
+    int n = params ? (int) AmalgameList_size(params) : 0;
+    const char* stack[16];
+    const char** values = _ampg_build_param_values(params, n, stack, 16);
+    PGresult* r = PQexecParams(db->conn, sql, n, NULL, values, NULL, NULL, 0);
+    if (values != stack) free((void*) values);
+    if (!r) {
+        db->last_error = _ampg_err_from_conn(db->conn);
+        return rows;
+    }
+    ExecStatusType st = PQresultStatus(r);
+    if (st != PGRES_TUPLES_OK) {
+        db->last_error = _ampg_err_from_result(r);
+        PQclear(r);
+        return rows;
+    }
+    int nrows = PQntuples(r);
+    int ncols = PQnfields(r);
+    for (int i = 0; i < nrows; i++) {
+        AmalgameList* row = AmalgameList_new();
+        for (int j = 0; j < ncols; j++) {
+            const char* v = PQgetvalue(r, i, j);
+            size_t nn = v ? strlen(v) : 0;
+            char* dup = (char*) code_alloc(nn + 1);
+            if (nn > 0) memcpy(dup, v, nn);
+            dup[nn] = '\0';
+            AmalgameList_add(row, (void*) dup);
+        }
+        AmalgameList_add(rows, (void*) row);
+    }
+    db->last_changes = (i64) nrows;
+    PQclear(r);
+    db->last_error = _ampg_err_dup("");
+    return rows;
+}
+
+static inline code_bool Amalgame_Database_PostgreSQL_Begin(AmalgamePostgreSQL* db) {
+    return Amalgame_Database_PostgreSQL_Exec(db, "BEGIN");
+}
+
+static inline code_bool Amalgame_Database_PostgreSQL_Commit(AmalgamePostgreSQL* db) {
+    return Amalgame_Database_PostgreSQL_Exec(db, "COMMIT");
+}
+
+static inline code_bool Amalgame_Database_PostgreSQL_Rollback(AmalgamePostgreSQL* db) {
+    return Amalgame_Database_PostgreSQL_Exec(db, "ROLLBACK");
+}
+
 /* PostgreSQL server version as a "MAJOR.MINOR" string ("16.2",
  * "14.10", …). Empty when the connection is closed. */
 static inline code_string Amalgame_Database_PostgreSQL_ServerVersion(AmalgamePostgreSQL* db) {

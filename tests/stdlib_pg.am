@@ -119,6 +119,76 @@ public class Program {
             }
         }
 
+        // ── v0.3: parameter binding ($1 placeholders) + transactions ─
+
+        let bindParams: List<string> = new List<string>()
+        bindParams.Add("Dave; DROP TABLE amctest_notes; --")
+        let bindOk: bool = PostgreSQL.ExecBind(db,
+            "INSERT INTO amctest_notes (body) VALUES ($1)", bindParams)
+        if (bindOk) {
+            Console.WriteLine("[PASS] execbind insert")
+        } else {
+            Console.WriteLine("[FAIL] execbind: " + PostgreSQL.LastError(db))
+        }
+
+        if (PostgreSQL.IsOpen(db)) {
+            Console.WriteLine("[PASS] execbind injection foiled")
+        } else {
+            Console.WriteLine("[FAIL] execbind injection: handle closed")
+        }
+
+        let qParams: List<string> = new List<string>()
+        qParams.Add("Dave; DROP TABLE amctest_notes; --")
+        let daveRows = PostgreSQL.QueryBindAll(db,
+            "SELECT body FROM amctest_notes WHERE body = $1", qParams)
+        if (daveRows.Count() == 1) {
+            Console.WriteLine("[PASS] querybindall fetch")
+        } else {
+            Console.WriteLine("[FAIL] querybindall rows got " + String_FromInt(daveRows.Count()))
+        }
+
+        let beginOk: bool = PostgreSQL.Begin(db)
+        if (beginOk) {
+            Console.WriteLine("[PASS] begin")
+        } else {
+            Console.WriteLine("[FAIL] begin: " + PostgreSQL.LastError(db))
+        }
+
+        PostgreSQL.Exec(db, "INSERT INTO amctest_notes (body) VALUES ('eve-rollback')")
+        let rollbackOk: bool = PostgreSQL.Rollback(db)
+        if (rollbackOk) {
+            Console.WriteLine("[PASS] rollback")
+        } else {
+            Console.WriteLine("[FAIL] rollback: " + PostgreSQL.LastError(db))
+        }
+        let eveParams: List<string> = new List<string>()
+        eveParams.Add("eve-rollback")
+        let eveRows = PostgreSQL.QueryBindAll(db,
+            "SELECT body FROM amctest_notes WHERE body = $1", eveParams)
+        if (eveRows.Count() == 0) {
+            Console.WriteLine("[PASS] rollback drops insert")
+        } else {
+            Console.WriteLine("[FAIL] rollback left " + String_FromInt(eveRows.Count()) + " rows")
+        }
+
+        PostgreSQL.Begin(db)
+        PostgreSQL.Exec(db, "INSERT INTO amctest_notes (body) VALUES ('frank-commit')")
+        let commitOk: bool = PostgreSQL.Commit(db)
+        if (commitOk) {
+            Console.WriteLine("[PASS] commit")
+        } else {
+            Console.WriteLine("[FAIL] commit: " + PostgreSQL.LastError(db))
+        }
+        let frankParams: List<string> = new List<string>()
+        frankParams.Add("frank-commit")
+        let frankRows = PostgreSQL.QueryBindAll(db,
+            "SELECT body FROM amctest_notes WHERE body = $1", frankParams)
+        if (frankRows.Count() == 1) {
+            Console.WriteLine("[PASS] commit persists insert")
+        } else {
+            Console.WriteLine("[FAIL] commit lost insert: " + String_FromInt(frankRows.Count()))
+        }
+
         // ── Cleanup + close ──────────────────────────────────
         PostgreSQL.Exec(db, "DROP TABLE amctest_notes")
         PostgreSQL.Close(db)
